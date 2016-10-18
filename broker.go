@@ -118,12 +118,7 @@ func (b *Broker) Open(conf *Config) error {
 		}
 
 		if conf.Net.SASL.Enable {
-			b.connErr = b.sendAndReceiveSASLPlainHandshake()
-			if b.connErr != nil {
-				Logger.Printf("Error while performing SASL handshake %s\n", b.addr)
-				return
-			}
-			b.connErr = b.sendAndReceiveSASLPlainAuth()
+			b.connErr = b.saslAuthenticate()
 			if b.connErr != nil {
 				err = b.conn.Close()
 				if err == nil {
@@ -519,8 +514,8 @@ func (b *Broker) responseReceiver() {
 	close(b.done)
 }
 
-func (b *Broker) sendAndReceiveSASLPlainHandshake() error {
-	rb := &SaslHandshakeRequest{"PLAIN"}
+func (b *Broker) sendAndReceiveSASLHandshake(method string) error {
+	rb := &SaslHandshakeRequest{method}
 	req := &request{correlationID: b.correlationID, clientID: b.conf.ClientID, body: rb}
 	buf, err := encode(req)
 	if err != nil {
@@ -564,6 +559,15 @@ func (b *Broker) sendAndReceiveSASLPlainHandshake() error {
 	Logger.Print("Successul SASL handshake")
 	return nil
 
+}
+
+func (b *Broker) saslAuthenticate() error {
+	err := b.sendAndReceiveSASLHandshake("PLAIN")
+	if err != nil {
+		Logger.Printf("Error performing SASL handshake %s: %s\n", b.addr, err)
+		return err
+	}
+	return b.sendAndReceiveSASLPlainAuth()
 }
 
 // Kafka 0.10.0 plans to support SASL Plain and Kerberos as per PR #812 (KIP-43)/(JIRA KAFKA-3149)
